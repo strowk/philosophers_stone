@@ -1,15 +1,10 @@
 mod alchemic_source;
-
-use laya::RLAgent;
+mod agent_builder;
 
 use crate::alchemic_source::AlchemicSource;
 
 fn main() -> anyhow::Result<()> {
-    // A checkpoint directory downloaded from Hugging Face (convaiinnovations/laya,
-    // -typed-decisions, or -multilingual) — rl_agent_config.json, tokenizer/, encoder/, model.safetensors.
-    let dir = dirs::cache_dir().expect("no cache dir");
-    let agent = RLAgent::load(dir.join("laya-rs").join("laya-typed-decisions"))?;
-
+    let agent = agent_builder::get_agent()?;
     let input = [
         "table",
         "meteorite",
