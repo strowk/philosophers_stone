@@ -3,9 +3,18 @@ name = "philosopher_stone"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["superui/hmr", "bevy/file_watcher"]
+
 [dependencies]
 anyhow = "1.0.104"
+bevy = { version = "0.20", default-features = false, features = ["2d", "ui", "audio"] }
+superui = { git = "https://github.com/strowk/bevy_superui.git", branch = "main", features = ["utilities"]}
 dirs = "7.0.0"
 laya-rs2 = "0.4.1"
 serde_json = "1"
 ureq = "3.5.0"
+
+[build-dependencies]
+supersolid = { git = "https://github.com/strowk/bevy_superui", branch = "main" }
+superui_css_utilities = { git = "https://github.com/strowk/bevy_superui", branch = "main" }

@@ -1,9 +1,17 @@
+use bevy::{prelude::*, transform::plugins};
+use superui::prelude::*;
+
 mod alchemic_source;
 mod agent_builder;
 
 use crate::alchemic_source::AlchemicSource;
 
-fn main() -> anyhow::Result<()> {
+fn plugin(app: &mut App) {
+    app.add_systems(Startup, setup);
+    // run_test().expect("no err");
+}
+
+fn run_test() -> anyhow::Result<()> {
     let agent = agent_builder::get_agent()?;
     let input = [
         "table",
@@ -18,6 +26,21 @@ fn main() -> anyhow::Result<()> {
     for (ingredient, classification) in res {
         println!("{ingredient}: {classification:?}")
     }
+    Ok(())
+}
+
+fn setup(mut commands: Commands, assets: Res<AssetServer>) {
+    commands.spawn(Camera2d);
+    commands.spawn(SuperUiRoot::from_asset_dir("ui", &assets));
+}
+
+fn main() -> anyhow::Result<()> {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugins(SuperUiPlugin)
+        .add_plugins(plugin)
+        .run();
+
 
     // let input = [
     //     "computer",
