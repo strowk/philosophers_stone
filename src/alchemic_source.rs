@@ -3,11 +3,9 @@ use std::{collections::HashMap, fmt::Display, task::Waker};
 use laya::{Answer, QType, Question, RLAgent};
 use serde_json::json;
 
-pub(crate) struct AlchemicSource {
-    agent: RLAgent,
-}
+pub(crate) struct AlchemicSource {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum Element {
     Water,
     Earth,
@@ -22,23 +20,20 @@ struct IngredientAnswers {
     fit: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum AlchemicClassification {
     NotFitForAlchemy,
     ProducesElement(Element),
 }
 
 impl AlchemicSource {
-    pub(crate) fn from_agent(agent: RLAgent) -> AlchemicSource {
-        return AlchemicSource { agent };
-    }
-
     pub(crate) fn classify(
         &mut self,
+        agent: &RLAgent,
         inputs: [&str; 4],
     ) -> anyhow::Result<HashMap<String, AlchemicClassification>> {
         let mut out = HashMap::new();
-        let res = self.ask_questions(inputs);
+        let res = self.ask_questions(agent, inputs);
         if let Ok(answers) = res {
             for IngredientAnswers {
                 ingredient,
@@ -56,15 +51,15 @@ impl AlchemicSource {
         Ok(out)
     }
 
-    fn ask_questions(&mut self, inputs: [&str; 4]) -> anyhow::Result<Vec<IngredientAnswers>> {
+    fn ask_questions(&mut self, agent: &RLAgent, inputs: [&str; 4]) -> anyhow::Result<Vec<IngredientAnswers>> {
         let mut result = vec![];
         for i in inputs {
-            result.push(self.ask_questions_for_ingredient(i)?);
+            result.push(self.ask_questions_for_ingredient(agent, i)?);
         }
         return Ok(result);
     }
 
-    fn ask_questions_for_ingredient(&mut self, i: &str) -> anyhow::Result<IngredientAnswers> {
+    fn ask_questions_for_ingredient(&mut self, agent: &RLAgent, i: &str) -> anyhow::Result<IngredientAnswers> {
         let state = json!({
             "ingredient": i,
         });
@@ -105,7 +100,7 @@ impl AlchemicSource {
         let element_id = "element";
         let fit_into_cauldron_id = "fit_into_cauldron";
 
-        let answers = self.agent.system_one(
+        let answers = agent.system_one(
             &state,
             &[
                 (element_id.to_string(), element),

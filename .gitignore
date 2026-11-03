@@ -1,3 +1,5 @@
 /target
 superui_modules/
 .superui/
+/tools/wasm-bindgen/
+/out/
