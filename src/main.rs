@@ -9,19 +9,18 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 mod agent_builder;
 mod alchemic_source;
+#[cfg(target_arch = "wasm32")]
+mod alchemic_source_web;
 mod cauldron;
 mod laya_agent_resource;
 #[cfg(target_arch = "wasm32")]
 mod laya_worker;
 
 #[cfg(target_arch = "wasm32")]
-use crate::alchemic_source::ask_laya_for_output;
+use crate::alchemic_source_web::ask_laya_for_output;
 use crate::{
     agent_builder::bevy::ModelDownloadChannel,
-    alchemic_source::{
-        AlchemicClassification, AlchemicSource, Element, transform_laya_response_to_classification,
-    },
-    laya_worker::LayaResponsesBatch,
+    alchemic_source::{AlchemicClassification, AlchemicSource, ClassicalElement},
 };
 
 fn plugin(app: &mut App) {
@@ -33,10 +32,15 @@ fn plugin(app: &mut App) {
         // .add_observer(on_ingredients_placed)
         .add_observer(ask_laya_for_output)
         .add_observer(process_laya_output);
+
+    #[cfg(target_arch = "wasm32")]
+    app.add_observer(ask_laya_for_output)
+        .add_observer(process_laya_output);
 }
 
-fn process_laya_output(resp: On<LayaResponsesBatch>, mut commands: Commands) {
-    let classes = transform_laya_response_to_classification(resp);
+#[cfg(target_arch = "wasm32")]
+fn process_laya_output(resp: On<laya_worker::LayaResponsesBatch>, mut commands: Commands) {
+    let classes = alchemic_source_web::transform_laya_response_to_classification(resp);
     let output = get_output(classes);
     commands.trigger(OutputReceived { output });
 }
@@ -79,19 +83,19 @@ fn get_output(classes: HashMap<String, AlchemicClassification>) -> String {
     let mut has_non_fit = 0;
     for (_, classification) in classes {
         match classification {
-            AlchemicClassification::ProducesElement(Element::Water) => {
+            AlchemicClassification::ProducesElement(ClassicalElement::Water) => {
                 has_water += 1;
             }
-            AlchemicClassification::ProducesElement(Element::Fire) => {
+            AlchemicClassification::ProducesElement(ClassicalElement::Fire) => {
                 has_fire += 1;
             }
-            AlchemicClassification::ProducesElement(Element::Earth) => {
+            AlchemicClassification::ProducesElement(ClassicalElement::Earth) => {
                 has_earth += 1;
             }
-            AlchemicClassification::ProducesElement(Element::Air) => {
+            AlchemicClassification::ProducesElement(ClassicalElement::Air) => {
                 has_air += 1;
             }
-            AlchemicClassification::ProducesElement(Element::Aether) => {
+            AlchemicClassification::ProducesElement(ClassicalElement::Aether) => {
                 has_aether += 1;
             }
             _ => {
