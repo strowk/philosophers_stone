@@ -25,6 +25,7 @@ reqwest = { version = "0.13.5" , features = ["stream"] }
 bytes = { version = "1.12.1" }
 futures-util = { version = "0.3.34"  }
 crossbeam-channel = "0.5.17"
+tokio = { version = "1.54.1", features = ["rt"] }
 
 [build-dependencies]
 supersolid = { git = "https://github.com/strowk/bevy_superui", branch = "main" }
@@ -33,7 +34,6 @@ superui_css_utilities = { git = "https://github.com/strowk/bevy_superui", branch
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.130"
 wasm-bindgen-futures = "0.4.80"
-tokio = { version = "1.54.1", features = ["rt"] }
 
 [target.'cfg(all(target_family = "wasm", any(target_os = "unknown", target_os = "none")))'.dependencies.web-sys]
 version = "0.3"

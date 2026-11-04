@@ -40,7 +40,7 @@ fn get_reqwest_reporter() -> impl ProgressReporter {
     }
 }
 
-async fn download_model_and_create_agent() -> anyhow::Result<RLAgent> {
+pub(crate) async fn download_model_and_create_agent() -> anyhow::Result<RLAgent> {
     let client = reqwest::Client::new();
 
     let config_files = [

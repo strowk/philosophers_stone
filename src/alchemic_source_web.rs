@@ -9,7 +9,9 @@ use laya::{Answer, QType, Question, RLAgent};
 use serde_json::{Value, json};
 
 use crate::{
-    IngredientsPlaced, alchemic_source::{AlchemicClassification, ClassicalElement}, laya_worker::{AnswerDto, LayaRequest, LayaRequestsBatch, LayaResponsesBatch, LayaWorker},
+    IngredientsPlaced,
+    alchemic_source::{AlchemicClassification, ClassicalElement, get_questions},
+    laya_worker::{AnswerDto, LayaRequest, LayaRequestsBatch, LayaResponsesBatch, LayaWorker},
 };
 
 pub(crate) fn ask_laya_for_output(
@@ -17,6 +19,9 @@ pub(crate) fn ask_laya_for_output(
     worker: NonSendMut<LayaWorker>,
     mut commands: Commands,
 ) {
+    if placed.ingredient_1 == "iddqd" {
+        return
+    }
     commands.trigger(get_questions_for_ingredients(placed, worker));
 }
 
@@ -31,53 +36,9 @@ pub(crate) fn get_questions_for_ingredients(
         &placed.ingredient_3,
         &placed.ingredient_4,
     ] {
-        let state = json!({
-            "ingredient": ingredient,
-        });
-
-        let element = Question {
-            qtype: QType::Choice,
-            instructions: format!("Which classical element an ingredient most associated with?"),
-            choice_criteria: vec![
-                ("water".into(), Some("liquid, wet, cold, aquatic".into())),
-                (
-                    "fire".into(),
-                    Some("heated, burning, spicy, energetic".into()),
-                ),
-                ("earth".into(), Some("solid, mineral, heavy".into())),
-                ("air".into(), Some("gas, light, fleeting, breathing".into())),
-                ("aether".into(), Some("celestial".into())),
-            ],
-            score_criteria: vec![],
-            noul_true: None,
-            noul_false: None,
-        };
-
-        let fit_into_cauldron = Question {
-            qtype: QType::Choice,
-            instructions: format!("Is an ingredient a physical item?"),
-            choice_criteria: vec![
-                ("yes".into(), None),
-                (
-                    "no".into(),
-                    Some("something abstract like 'invention'".into()),
-                ),
-            ],
-            score_criteria: vec![],
-            noul_true: None,
-            noul_false: None,
-        };
-
-        let element_id = "element";
-        let fit_into_cauldron_id = "fit_into_cauldron";
-
-        res.reqs.push(worker.new_request(
-            state,
-            vec![
-                (element_id.into(), element.into()),
-                (fit_into_cauldron_id.into(), fit_into_cauldron.into()),
-            ],
-        ));
+        let (state, questions) = get_questions(ingredient);
+        let questions = questions.into_iter().map(|(s, q)| (s, q.into())).collect();
+        res.reqs.push(worker.new_request(state, questions));
     }
     res
 }

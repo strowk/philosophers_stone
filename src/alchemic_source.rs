@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 pub(crate) struct AlchemicSource {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum ClassicalElement {
     Water,
     Earth,
@@ -156,4 +156,54 @@ impl AlchemicSource {
 
         Ok(result)
     }
+}
+
+pub(crate) fn get_questions(
+    ingredient: &str,
+) -> (Value, Vec<(String, laya::Question)>) {
+    let state = json!({
+        "ingredient": ingredient,
+    });
+
+    let element = Question {
+        qtype: QType::Choice,
+        instructions: format!("Which classical element an ingredient most associated with?"),
+        choice_criteria: vec![
+            ("water".into(), Some("liquid, wet, cold, aquatic".into())),
+            (
+                "fire".into(),
+                Some("heated, burning, spicy, energetic".into()),
+            ),
+            ("earth".into(), Some("solid, mineral, heavy".into())),
+            ("air".into(), Some("gas, light, fleeting, breathing".into())),
+            ("aether".into(), Some("celestial".into())),
+        ],
+        score_criteria: vec![],
+        noul_true: None,
+        noul_false: None,
+    };
+
+    let fit_into_cauldron = Question {
+        qtype: QType::Choice,
+        instructions: format!("Is an ingredient a physical item?"),
+        choice_criteria: vec![
+            ("yes".into(), None),
+            (
+                "no".into(),
+                Some("something abstract like 'invention'".into()),
+            ),
+        ],
+        score_criteria: vec![],
+        noul_true: None,
+        noul_false: None,
+    };
+
+    let element_id = "element";
+    let fit_into_cauldron_id = "fit_into_cauldron";
+
+    let questions = vec![
+        (element_id.into(), element.into()),
+        (fit_into_cauldron_id.into(), fit_into_cauldron.into()),
+    ];
+    (state, questions)
 }

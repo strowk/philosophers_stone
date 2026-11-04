@@ -1,14 +1,23 @@
-import { createSignal, onMount, render } from "supersolid";
+import { createSignal, onMount, render, Show } from "supersolid";
 
 function App() {
   const [ingredient1, setIngredient1] = createSignal("");
   const [ingredient2, setIngredient2] = createSignal("");
   const [ingredient3, setIngredient3] = createSignal("");
   const [ingredient4, setIngredient4] = createSignal("");
-  const [output, setOutput] = createSignal("Cauldron output would appear here.");
+  const [gotStone, setGotStone] = createSignal(false);
+  const [output, setOutput] = createSignal(
+    "Cauldron output would appear here."
+  );
   onMount(() => {
     bevy.on("outputReceived", ({ output }) => {
       setOutput(`Cauldron output: ${output}`);
+      console.log("output received in ui")
+    });
+    bevy.on("gotStone", (input) => {
+      setGotStone(true);
+      setOutput(`You have received Philosopher's Stone, congratulations!!!`);
+      console.log("received the stone in ui");
     });
   });
   const sending = () => {
@@ -52,7 +61,19 @@ function App() {
         submit={sending}
       />
       <Output text={output} />
+
+      <div>
+        <Stone gotStone={gotStone} />
+      </div>
     </RootLayout>
+  );
+}
+
+function Stone({ gotStone }: { gotStone: () => boolean }) {
+  return (
+    <Show when={gotStone()}>
+      <img class="w-[500px]" src="./stone.png" />
+    </Show>
   );
 }
 
