@@ -49,5 +49,10 @@ features = [
     "Window",
     "CacheStorage",
     "Cache",
-    "Response"
+    "Response",
+    "Worker",
+    "WorkerOptions",
+    "WorkerType",
+    "MessageEvent",
+    "DedicatedWorkerGlobalScope"
 ]

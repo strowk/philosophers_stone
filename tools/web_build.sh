@@ -17,4 +17,4 @@ fi
 
 rm -r out/assets || echo "no assets folder in out"
 cp -r assets out/assets
-cp web/index.html out/index.html
+cp web/* out/

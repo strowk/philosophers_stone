@@ -7,9 +7,11 @@ pub(crate) trait ProgressReporter {
     fn report(&mut self, progress_percent: u8, current_item: String);
 }
 
-struct OutputReporter {}
+// TODO: add UI download reporter
 
-impl ProgressReporter for OutputReporter {
+struct StdoutReporter {}
+
+impl ProgressReporter for StdoutReporter {
     fn report(&mut self, progress_percent: u8, current_item: String) {
         println!("{current_item}: {progress_percent}%")
     }
@@ -27,22 +29,6 @@ impl ProgressReporter for ConsoleReporter {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-pub(crate) fn get_agent_web(
-    rl_agent_config_json: &str,
-    tokenizer_config_json: &str,
-    tokenizer_bytes: &[u8],
-    encoder_config_json: &str,
-    weights: &[u8],
-) -> anyhow::Result<RLAgent> {
-    Ok(RLAgent::load_from_bytes("", "", &[], "", &[])?)
-}
-
-// fn get_reqwest_client() {
-//     let client = reqwest::ClientBuilder::new()..build();
-
-// }
-
 fn get_reqwest_reporter() -> impl ProgressReporter {
     #[cfg(target_arch = "wasm32")]
     {
@@ -50,7 +36,7 @@ fn get_reqwest_reporter() -> impl ProgressReporter {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        OutputReporter {}
+        StdoutReporter {}
     }
 }
 
@@ -107,11 +93,11 @@ async fn download_model_and_create_agent() -> anyhow::Result<RLAgent> {
     }
 
     Ok(RLAgent::load_from_bytes(
-        res.get(0).unwrap(),
-        res.get(1).unwrap(),
-        &tokenizer.unwrap(),
-        res.get(2).unwrap(),
-        &tensors.unwrap(),
+        res.get(0).expect("did not get rl agent config"),
+        res.get(1).expect("did not get tokenizer config"),
+        &tokenizer.expect("did not tokenizer bytes"),
+        res.get(2).expect("did not encoder config"),
+        &tensors.expect("did not get weights"),
     )?)
 }
 
@@ -124,7 +110,7 @@ fn get_cache_folder() -> PathBuf {
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::{JsCast, JsValue};
 #[cfg(target_arch = "wasm32")]
-use web_sys::js_sys;
+use web_sys::{WorkerGlobalScope, js_sys};
 
 #[cfg(target_arch = "wasm32")]
 fn js_to_anyhow(e: JsValue) -> anyhow::Error {
@@ -138,17 +124,41 @@ pub(crate) async fn download_file_with_forced_cache(
     mut progress_reporter: impl ProgressReporter,
     file: &str,
 ) -> anyhow::Result<Vec<u8>> {
+
     use futures_util::StreamExt;
     use wasm_bindgen_futures::JsFuture;
     use web_sys::{Cache, Response};
 
     // try to hit the cache
-    let window = web_sys::window().unwrap();
-    let cache: Cache = JsFuture::from(window.caches().unwrap().open("laya-models-cache"))
-        .await
-        .map_err(js_to_anyhow)?
-        .dyn_into()
-        .unwrap();
+    let cache_name = "laya-models-cache";
+    let cache = {
+        match web_sys::window() {
+            Some(window) => {
+                let cache: Cache = JsFuture::from(
+                    window
+                        .caches()
+                        .expect("did not get caches")
+                        .open(cache_name),
+                )
+                .await
+                .map_err(js_to_anyhow)?
+                .dyn_into()
+                .expect("did not get cache");
+                cache
+            }
+            None => {
+                // we may be in worker
+                let scope: WorkerGlobalScope = js_sys::global().unchecked_into();
+                let cache: Cache =
+                    JsFuture::from(scope.caches().expect("did not get caches").open(cache_name))
+                        .await
+                        .map_err(js_to_anyhow)?
+                        .dyn_into()
+                        .expect("did not get cache");
+                cache
+            }
+        }
+    };
 
     let from_c = JsFuture::from(cache.match_with_str(url))
         .await
@@ -164,8 +174,17 @@ pub(crate) async fn download_file_with_forced_cache(
         return Ok(js_sys::Uint8Array::new(&buffer).to_vec());
     }
 
+    // TODO: clean this up!
+    // this thing eats shitton of memory (~2-3x from model size, so circa 2Gb) cause we do lots of ugly copying 
+    // js -> wasm -> js and not even streaming..
+    // It would make more sense to ditch reqwest here and just use fetch natively, stream directly to cache in js
+    // without wasm hop, then simply re-read from cache again as above 
+    // (at which point entire model would load to wasm memory, but only one time)
+    // Note: we cannot simply force built-in cache here, because browsers may or may not respect that,
+    // so using Cache API is really needed
+
     // Reqwest setup
-    let mut req = client.get(url);
+    let req = client.get(url);
 
     let res = req
         .send()

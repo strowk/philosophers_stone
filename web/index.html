@@ -2,7 +2,7 @@
 <html lang="en">
   <body style="margin: 0px">
     <script type="module">
-      import init from "./philosopher_stone.js";
+      import init, { wasm_start_main_app } from "./philosopher_stone.js";
 
       init()
         .then(() => {
@@ -11,6 +11,15 @@
           if (loading) {
             loading.remove();
           }
+          wasm_start_main_app().catch((error) => {
+            if (
+              !error.message.startsWith(
+                "Using exceptions for control flow, don't mind me. This isn't actually an error!"
+              )
+            ) {
+              throw error;
+            }
+          });
         })
         .catch((error) => {
           if (
