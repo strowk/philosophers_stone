@@ -133,45 +133,45 @@ function EssenceBadge({ essence }: { essence: string }) {
 }
 
 function EssenceText({ children }: { children: string }) {
-  return <div class="text-gray-900 p-2 font-JimNightshade-Regular">{children}</div>;
+  return <div class="text-gray-800 p-2 font-JimNightshade-Regular text-2xl">{children}</div>;
 }
 
 function WaterEssence() {
   return (
-    <div class="bg-blue-400 rounded-md">
-      <EssenceText>water</EssenceText>
+    <div class="bg-blue-400 rounded-lg">
+      <EssenceText>WATER</EssenceText>
     </div>
   );
 }
 
 function AirEssence() {
   return (
-    <div class="bg-blue-200 rounded-md">
-      <EssenceText>air</EssenceText>
+    <div class="bg-blue-200 rounded-lg">
+      <EssenceText>AIR</EssenceText>
     </div>
   );
 }
 
 function EarthEssence() {
   return (
-    <div class="bg-green-300 rounded-md">
-      <EssenceText>earth</EssenceText>
+    <div class="bg-green-300 rounded-lg">
+      <EssenceText>EARTH</EssenceText>
     </div>
   );
 }
 
 function FireEssence() {
   return (
-    <div class="bg-amber-300 rounded-md">
-      <EssenceText>fire</EssenceText>
+    <div class="bg-amber-300 rounded-lg">
+      <EssenceText>FIRE</EssenceText>
     </div>
   );
 }
 
 function AetherEssence() {
   return (
-    <div class="bg-purple-300 rounded-md">
-      <EssenceText>aether</EssenceText>
+    <div class="bg-purple-300 rounded-lg">
+      <EssenceText>AETHER</EssenceText>
     </div>
   );
 }
