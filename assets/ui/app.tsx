@@ -183,7 +183,7 @@ const trivia = [
   "According to Plato, the four elements are derived from a common source or prima materia (first matter), associated with chaos.",
   "The earliest known written mention of the philosopher's stone is in the Cheirokmeta by Zosimos of Panopolis (c. 300 AD).",
   "Greek-speaking alchemists often named their craft 'the Art' or 'Knowledge', and it was often characterised as mystic, sacred, or divine.",
-  "The Squared Circle is an Alchemical Symbol illustrating the interplay of the four elements of matter symbolizing the philosopher's stone - the result of the 'Great Work'",
+  "The Squared Circle is an Alchemical Symbol illustrating the interplay of the four elements of matter symbolizing the philosopher's stone - the result of the 'Great Work'.",
 ];
 
 function Trivia() {
