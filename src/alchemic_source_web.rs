@@ -26,6 +26,12 @@ pub(crate) fn ask_laya_for_output(
     if placed.ingredient_1 == "iddqd" {
         return;
     }
+    if processing.in_progress > 0 {
+        commands.trigger(OutputReceived {
+            output: "Cauldron is currently processing...".to_string(),
+        });
+        return;
+    }
     let c = placed.clone();
     for ingredient in [
         c.ingredient_1,
@@ -39,12 +45,6 @@ pub(crate) fn ask_laya_for_output(
             });
             return;
         }
-    }
-    if processing.in_progress > 0 {
-        commands.trigger(OutputReceived {
-            output: "Cauldron is currently processing...".to_string(),
-        });
-        return;
     }
     if !readiness.ready {
         commands.trigger(OutputReceived {
