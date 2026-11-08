@@ -133,7 +133,11 @@ function EssenceBadge({ essence }: { essence: string }) {
 }
 
 function EssenceText({ children }: { children: string }) {
-  return <div class="text-gray-800 p-2 font-JimNightshade-Regular text-2xl">{children}</div>;
+  return (
+    <div class="text-gray-800 p-2 font-JimNightshade-Regular text-2xl">
+      {children}
+    </div>
+  );
 }
 
 function WaterEssence() {
@@ -262,7 +266,10 @@ function Stone({ gotStone }: { gotStone: () => boolean }) {
   return (
     <Show when={gotStone()}>
       {/* <Show when={true}> */}
-      <img class="w-[150px] pulsing-size-anim" src="./stone.png" />
+      <img
+        class="bg-green-700 p-2 rounded-full w-[150px] pulsing-size-anim"
+        src="./stone.png"
+      />
     </Show>
   );
 }
@@ -301,7 +308,7 @@ function IngredientInput({
       type="text"
       value={value()}
       placeholder="input ingredient"
-      class="text-black bg-green-200 focus:bg-green-100 border-2 focus:border-4 border-green-900 focus:border-green-300 max-w-128 m-1 p-1 rounded-md"
+      class="text-gray-200 bg-green-700 focus:bg-green-600 border-2 focus:border-4 border-green-900 focus:border-green-300 max-w-128 m-1 p-1 rounded-md"
       onInput={(e) => {
         setValue(e.target.value);
       }}
