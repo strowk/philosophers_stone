@@ -142,7 +142,7 @@ function EssenceText({ children }: { children: string }) {
 
 function WaterEssence() {
   return (
-    <div class="bg-blue-400 rounded-lg">
+    <div class="bg-blue-400 rounded-full flex justify-center items-center w-[80px] h-[80px]">
       <EssenceText>WATER</EssenceText>
     </div>
   );
@@ -150,7 +150,7 @@ function WaterEssence() {
 
 function AirEssence() {
   return (
-    <div class="bg-blue-200 rounded-lg">
+    <div class="bg-blue-200 rounded-full flex justify-center items-center w-[80px] h-[80px]">
       <EssenceText>AIR</EssenceText>
     </div>
   );
@@ -158,7 +158,7 @@ function AirEssence() {
 
 function EarthEssence() {
   return (
-    <div class="bg-green-300 rounded-lg">
+    <div class="bg-green-300 rounded-full flex justify-center items-center w-[80px] h-[80px]">
       <EssenceText>EARTH</EssenceText>
     </div>
   );
@@ -166,7 +166,7 @@ function EarthEssence() {
 
 function FireEssence() {
   return (
-    <div class="bg-amber-300 rounded-lg">
+    <div class="bg-amber-300 rounded-full flex justify-center items-center w-[80px] h-[80px]">
       <EssenceText>FIRE</EssenceText>
     </div>
   );
@@ -174,7 +174,7 @@ function FireEssence() {
 
 function AetherEssence() {
   return (
-    <div class="bg-purple-300 rounded-lg">
+    <div class="bg-purple-300 rounded-full flex justify-center items-center w-[80px] h-[80px]">
       <EssenceText>AETHER</EssenceText>
     </div>
   );
