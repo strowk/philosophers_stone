@@ -18,7 +18,7 @@ function App() {
     });
     bevy.on("gotStone", (input) => {
       setGotStone(true);
-      setOutput(`You have received Philosopher's Stone, congratulations!!!`);
+      setOutput(`You have received the Philosopher's Stone, congratulations!!!`);
       console.log("received the stone in ui");
     });
   });
