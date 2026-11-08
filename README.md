@@ -15,3 +15,4 @@ at your option.
 
 Additionally this project includes fonts, each of which is licensed under the SIL Open Font License the full text of which is included in `assets/ui` with the same name as the font file but with ".LICENSE.txt" extension.
 
+In runtime game will download [laya model weights](https://huggingface.co/convaiinnovations/laya) which are licensed as Apache License, Version 2.0 as well.
