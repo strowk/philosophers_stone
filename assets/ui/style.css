@@ -112,9 +112,19 @@
   src: url("./JimNightshade-Regular.ttf");
 }
 
-h1 {
-    font-family: "JimNightshade-Regular";
-    font-size: 2rem;
-    line-height: 2.5rem;
+@font-face {
+  font-family: "CinzelDecorative-Regular";
+  src: url("./CinzelDecorative-Regular.ttf");
 }
 
+.font-CinzelDecorative-Regular {
+  font-family: "CinzelDecorative-Regular";
+  font-size: 2rem;
+  line-height: 2.5rem;
+}
+
+.font-JimNightshade-Regular {
+  font-family: "JimNightshade-Regular";
+  font-size: 2rem;
+  line-height: 2.5rem;
+}

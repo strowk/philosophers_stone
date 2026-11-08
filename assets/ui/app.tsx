@@ -178,12 +178,11 @@ function AetherEssence() {
 
 const trivia = [
   "Alchemy is an ancient branch of natural philosophy, a philosophical and protoscientific tradition that was once practised in China, India, the Muslim world, and Europe.",
-  "Greek-speaking alchemists often named their craft 'the Art' or 'Knowledge', and it was often characterised as mystic, sacred, or divine.",
-  "Alchemical writers used classical figures from Greek (e.g., Hades), Roman (e.g., Lucius), and Egyptian mythology to illuminate their works and allegorize alchemical transmutation.",
-  "The earliest known written mention of the philosopher's stone is in the Cheirokmeta by Zosimos of Panopolis (c. 300 AD).",
-  "In alchemy and philosophy, prima materia, materia prima, or first matter, is the ubiquitous starting material required for the alchemical magnum opus and the creation of the philosopher's stone.",
   "The Magnum Opus or Great Work is a term for the process of working with the prima materia to create the philosopher's stone.",
-  "According to Plato, the four elements are derived from a common source or prima materia (first matter), associated with chaos. Prima materia is also the name alchemists assign to the starting ingredient for the creation of the philosopher's stone.",
+  "Alchemical writers used classical figures from Greek (e.g., Hades), Roman (e.g., Lucius), and Egyptian mythology to illuminate their works and allegorize alchemical transmutation.",
+  "According to Plato, the four elements are derived from a common source or prima materia (first matter), associated with chaos.",
+  "The earliest known written mention of the philosopher's stone is in the Cheirokmeta by Zosimos of Panopolis (c. 300 AD).",
+  "Greek-speaking alchemists often named their craft 'the Art' or 'Knowledge', and it was often characterised as mystic, sacred, or divine.",
   "The Squared Circle is an Alchemical Symbol illustrating the interplay of the four elements of matter symbolizing the philosopher's stone - the result of the 'Great Work'",
 ];
 
@@ -212,7 +211,7 @@ function Trivia() {
   });
   return (
     <div class="pt-2 flex flex-col w-full">
-      <div class="text-md mb-2 w-full">Trivia:</div>
+      <div class="text-md mb-2 w-full font-JimNightshade-Regular">Trivia:</div>
       <div class="relative text-xs">
         <Show when={next() !== ""}>
           <div class="absolute top-0 w-full moving-from-0">{current()}</div>
@@ -281,7 +280,7 @@ function RootLayout({
 }
 
 function Title({ text }: { text: string }) {
-  return <h1 class="text-white">{text}</h1>;
+  return <h1 class="font-CinzelDecorative-Regular text-white">{text}</h1>;
 }
 
 function Subtitle({ text }: { text: string }) {
