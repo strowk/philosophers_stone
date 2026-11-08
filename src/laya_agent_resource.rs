@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use laya::RLAgent;
 
-use crate::{Loading, agent_builder::bevy::ModelDownloadChannels};
+use crate::{Loading, agent_builder::bevy::ModelDownloadChannels, agent_readiness::AgentIsReady};
 
 #[derive(Resource)]
 pub(crate) struct LayaAgentResource {
@@ -30,10 +30,6 @@ fn update_agent_when_model_is_ready(
         let none = msg.agent.is_none();
         info!("Received initialized agent none: {none}");
         agent.agent = msg.agent;
-        commands.trigger(Loading {
-            name: "".to_string(),
-            percent: 0,
-            show: false, // download is done
-        });
+        commands.trigger(AgentIsReady {});
     }
 }

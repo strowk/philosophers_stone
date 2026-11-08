@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 use crate::{
     IngredientsPlaced, OutputReceived,
+    agent_readiness::AgentReadiness,
     alchemic_source::{AlchemicClassification, ClassicalElement, get_questions},
     laya_processing::LayaProcessingResource,
     laya_worker::{AnswerDto, LayaRequest, LayaRequestsBatch, LayaResponsesBatch, LayaWorkersPool},
@@ -20,6 +21,7 @@ pub(crate) fn ask_laya_for_output(
     worker: NonSendMut<LayaWorkersPool>,
     mut commands: Commands,
     processing: Res<LayaProcessingResource>,
+    readiness: Res<AgentReadiness>,
 ) {
     if placed.ingredient_1 == "iddqd" {
         return;
@@ -32,10 +34,24 @@ pub(crate) fn ask_laya_for_output(
         c.ingredient_4,
     ] {
         if ingredient.trim() == "" {
-            return
+            commands.trigger(OutputReceived {
+                output: "All 4 ingredients have to be entered for cauldron to work.".to_string(),
+            });
+            return;
         }
     }
     if processing.in_progress > 0 {
+        commands.trigger(OutputReceived {
+            output: "Cauldron is currently processing...".to_string(),
+        });
+        return;
+    }
+    if !readiness.ready {
+        commands.trigger(OutputReceived {
+            output:
+                "Wait until cauldron is fully readied, then type in 4 ingredients and press Enter."
+                    .to_string(),
+        });
         return;
     }
     commands.trigger(get_questions_for_ingredients(placed, worker));

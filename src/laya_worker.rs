@@ -17,6 +17,7 @@ use web_sys::{
 
 use crate::{
     agent_builder::{self, bevy::ModelDownloadProgress},
+    agent_readiness::AgentIsReady,
     laya_agent_resource::{self, LayaAgentResource},
 };
 
@@ -39,6 +40,7 @@ pub(crate) struct LayaWorkersPool {
     in_flight_reqs: HashMap<u64, InFlightRequest>,
     laya_responses_inbox: Rc<RefCell<VecDeque<LayaResponse>>>,
     model_download_progress_inbox: Rc<RefCell<VecDeque<ModelDownloadProgress>>>,
+    agent_is_ready_inbox: Rc<RefCell<VecDeque<AgentIsReady>>>,
     next_id: u64,
     pending_batches: HashMap<uuid::Uuid, PendingBatch>,
     req_to_batch: HashMap<u64, uuid::Uuid>,
@@ -46,11 +48,13 @@ pub(crate) struct LayaWorkersPool {
 
 const LAYA_RESPONSE_PREFIX: &str = "laya_response:";
 const MODEL_DOWNLOAD_PROGRESS_PREFIX: &str = "model_download_progress:";
+const AGENT_IS_READY_PREFIX: &str = "agent_is_ready:";
 
 pub(crate) fn plugin(app: &mut App) {
     app.add_systems(Startup, setup_laya_worker);
     app.add_systems(Update, poll_worker_responses);
     app.add_systems(Update, poll_worker_download_progress);
+    app.add_systems(Update, poll_worker_is_agent_ready);
     app.add_observer(
         |on: On<LayaRequest>, mut pool: NonSendMut<LayaWorkersPool>| {
             let req =
@@ -143,6 +147,12 @@ fn poll_worker_download_progress(worker: NonSendMut<LayaWorkersPool>, mut comman
     }
 }
 
+fn poll_worker_is_agent_ready(worker: NonSendMut<LayaWorkersPool>, mut commands: Commands) {
+    while let Some(resp) = worker.agent_is_ready_inbox.borrow_mut().pop_front() {
+        commands.trigger(resp);
+    }
+}
+
 fn poll_worker_responses(worker: NonSendMut<LayaWorkersPool>, mut commands: Commands) {
     let worker = worker.into_inner();
     while let Some(resp) = worker.laya_responses_inbox.borrow_mut().pop_front() {
@@ -192,6 +202,7 @@ fn setup_laya_worker(world: &mut World) {
     let mut web_workers = vec![];
     let laya_responses_inbox = Rc::new(RefCell::new(VecDeque::new()));
     let model_download_progress_inbox = Rc::new(RefCell::new(VecDeque::new()));
+    let agent_is_ready_inbox = Rc::new(RefCell::new(VecDeque::new()));
 
     for _ in 0..1 {
         // temporarily fix to one worker, should scale depending on navigator.deviceMemory and navigator.hardwareConcurrency
@@ -207,6 +218,7 @@ fn setup_laya_worker(world: &mut World) {
             Ok(web_worker) => {
                 let responses_inbox_cb = laya_responses_inbox.clone();
                 let progress_inbox_cb = model_download_progress_inbox.clone();
+                let ready_inbox_cb = agent_is_ready_inbox.clone();
                 let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
                     let Some(text) = e.data().as_string() else {
                         error!("Received not a string data");
@@ -224,6 +236,8 @@ fn setup_laya_worker(world: &mut World) {
                         let resp: ModelDownloadProgress = serde_json::from_str(text)
                             .expect("model download progress sent was not parsed as json");
                         progress_inbox_cb.borrow_mut().push_back(resp);
+                    } else if text.starts_with(AGENT_IS_READY_PREFIX) {
+                        ready_inbox_cb.borrow_mut().push_back(AgentIsReady {});
                     }
                 });
                 web_worker.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
@@ -244,6 +258,7 @@ fn setup_laya_worker(world: &mut World) {
         next_id: 1,
         pending_batches: HashMap::new(),
         req_to_batch: HashMap::new(),
+        agent_is_ready_inbox,
     });
 }
 
@@ -257,6 +272,12 @@ pub(crate) fn worker_main() {
         runner_plugin,
     ));
     app.add_observer(pass_on_download_progress);
+    app.add_observer(|_: On<AgentIsReady>| {
+        let scope: DedicatedWorkerGlobalScope = js_sys::global().unchecked_into();
+        if let Err(err) = scope.post_message(&JsValue::from_str(&AGENT_IS_READY_PREFIX)) {
+            error!("Failed to post message: {err:?}");
+        }
+    });
     info!("Laya Worker start");
     app.run();
 }

@@ -22,6 +22,8 @@ mod iddqd;
 #[cfg(target_arch = "wasm32")]
 mod laya_processing;
 
+mod agent_readiness;
+
 use crate::{
     agent_builder::{
         SystemReporter,
@@ -343,6 +345,8 @@ fn main_app() {
         SuperUiPlugin,
         // laya_agent_resource::plugin,
         plugin,
+        agent_readiness::plugin,
     ))
     .run();
 }
+

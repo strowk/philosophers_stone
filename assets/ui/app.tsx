@@ -6,7 +6,7 @@ function App() {
   const [ingredient3, setIngredient3] = createSignal("");
   const [ingredient4, setIngredient4] = createSignal("");
   const [output, setOutput] = createSignal(
-    "Cauldron output would appear here. Type in 4 ingredients and press Enter."
+    "Cauldron output would appear here. Type in 4 ingredients and press Enter once cauldron has fully prepared."
   );
   const [gotStone, setGotStone] = createSignal(false);
   // loading state
