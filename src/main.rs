@@ -19,9 +19,15 @@ mod laya_worker;
 
 #[cfg(target_arch = "wasm32")]
 mod iddqd;
+#[cfg(target_arch = "wasm32")]
+mod laya_processing;
 
 use crate::{
-    agent_builder::{bevy::ModelDownloadChannel, download_model_and_create_agent},
+    agent_builder::{
+        SystemReporter,
+        bevy::{ModelDownloadChannels, ModelDownloadProgress},
+        download_model_and_create_agent,
+    },
     alchemic_source::{AlchemicClassification, AlchemicSource, ClassicalElement},
 };
 #[cfg(target_arch = "wasm32")]
@@ -39,6 +45,9 @@ fn plugin(app: &mut App) {
     #[cfg(target_arch = "wasm32")]
     app.add_superui_command::<IngredientsPlaced>("ingredientsPlaced")
         .add_superui_event::<OutputReceived>("outputReceived");
+
+    app.add_superui_event::<Loading>("loading");
+    app.add_superui_event::<EssencesToShow>("essences");
     // .add_observer(on_ingredients_placed)
 
     app.add_observer(on_received_all_elements);
@@ -48,6 +57,26 @@ fn plugin(app: &mut App) {
     app.add_observer(ask_laya_for_output)
         .add_observer(iddqd::process_iddqd)
         .add_observer(process_laya_output);
+
+    app.add_observer(
+        |model_download_progress: On<ModelDownloadProgress>, mut commands: Commands| {
+            let current_item = &model_download_progress.progress.current_item;
+            let name = format!("downloading - {current_item}");
+            let percent = model_download_progress.progress.progress_percent;
+            commands.trigger(Loading {
+                show: percent < 100,
+                name,
+                percent,
+            })
+        },
+    );
+}
+
+#[derive(Event, Serialize)]
+struct Loading {
+    show: bool,
+    name: String,
+    percent: u8,
 }
 
 #[derive(Event)]
@@ -56,6 +85,14 @@ struct ReceivedAllElements {}
 #[derive(Event, Serialize, Deserialize)]
 struct GotStone {}
 
+enum CauldronOutput {
+    Element(ClassicalElement),
+    Steam,
+    Dust,
+    Sludge,
+    Nothing,
+}
+
 #[cfg(target_arch = "wasm32")]
 fn process_laya_output(
     resp: On<laya_worker::LayaResponsesBatch>,
@@ -63,16 +100,11 @@ fn process_laya_output(
     mut produced_elements: ResMut<ProducedElements>,
 ) {
     let classes = alchemic_source_web::transform_laya_response_to_classification(resp);
-    let output = get_output(&classes);
+    let (output, output_class) = get_output(&classes);
 
-    for (_, classification) in classes {
-        match classification {
-            AlchemicClassification::ProducesElement(element) => {
-                let new_count = produced_elements.elements.get(&element).unwrap_or(&0) + 1;
-                produced_elements.elements.insert(element, new_count);
-            }
-            _ => {}
-        }
+    if let CauldronOutput::Element(el) = output_class {
+        let new_count = produced_elements.elements.get(&el).unwrap_or(&0) + 1;
+        produced_elements.elements.insert(el, new_count);
     }
 
     let elements_count = produced_elements.elements.len();
@@ -85,6 +117,24 @@ fn process_laya_output(
     } else {
         commands.trigger(OutputReceived { output });
     }
+
+    let mut essences: Vec<String> = vec![];
+    for (element, count) in produced_elements.elements.iter() {
+        if *count > 0 {
+            essences.push(format!("{element}"));
+        }
+    }
+    commands.trigger(EssencesToShow { essences });
+}
+
+struct EssenceInInventory {
+    name: String,
+    count: usize,
+}
+
+#[derive(Event, Serialize)]
+struct EssencesToShow {
+    essences: Vec<String>,
 }
 
 fn on_received_all_elements(_: On<ReceivedAllElements>, mut commands: Commands) {
@@ -97,7 +147,7 @@ pub(crate) struct OutputReceived {
     output: String,
 }
 
-#[derive(Event, Deserialize, Debug)]
+#[derive(Event, Deserialize, Debug, Clone)]
 pub(crate) struct IngredientsPlaced {
     pub(crate) ingredient_1: String,
     pub(crate) ingredient_2: String,
@@ -110,23 +160,23 @@ struct ProducedElements {
     elements: HashMap<ClassicalElement, u64>,
 }
 
-fn on_ingredients_placed(
-    on: On<IngredientsPlaced>,
-    mut commands: Commands,
-    res: Res<laya_agent_resource::LayaAgentResource>,
-) {
-    match cauldron::run_cauldron(on.event(), &res) {
-        Err(e) => {
-            error!("Failed to calculate {e:?}");
-        }
-        Ok(classes) => {
-            let output = get_output(&classes);
-            commands.trigger(OutputReceived { output })
-        }
-    }
-}
+// fn on_ingredients_placed(
+//     on: On<IngredientsPlaced>,
+//     mut commands: Commands,
+//     res: Res<laya_agent_resource::LayaAgentResource>,
+// ) {
+//     match cauldron::run_cauldron(on.event(), &res) {
+//         Err(e) => {
+//             error!("Failed to calculate {e:?}");
+//         }
+//         Ok(classes) => {
+//             let output = get_output(&classes);
+//             commands.trigger(OutputReceived { output })
+//         }
+//     }
+// }
 
-fn get_output(classes: &HashMap<String, AlchemicClassification>) -> String {
+fn get_output(classes: &HashMap<String, AlchemicClassification>) -> (String, CauldronOutput) {
     let mut has_fire = 0;
     let mut has_water = 0;
     let mut has_earth = 0;
@@ -157,38 +207,38 @@ fn get_output(classes: &HashMap<String, AlchemicClassification>) -> String {
     }
 
     if has_non_fit > 0 {
-        return "nothing in particular".to_string();
+        return ("nothing in particular".to_string(), CauldronOutput::Nothing);
     }
 
     if has_water > 0 && has_fire > 0 && has_earth == 0 && has_air == 0 {
-        return "quickly dissipated steam".to_string();
+        return ("quickly dissipated steam".to_string(), CauldronOutput::Steam);
     }
 
     if has_earth > 0 && has_air > 0 && has_water == 0 && has_fire == 0 {
-        return "quickly dissipated dust".to_string();
+        return ("quickly dissipated dust".to_string(), CauldronOutput::Dust);
     }
 
     if has_earth >= 3 && has_air == 0 {
-        return "ESSENCE of earth".to_string();
+        return ("ESSENCE of earth".to_string(), CauldronOutput::Element(ClassicalElement::Earth));
     }
 
     if has_air >= 3 && has_earth == 0 {
-        return "ESSENCE of air".to_string();
+        return ("ESSENCE of air".to_string(), CauldronOutput::Element(ClassicalElement::Air));
     }
 
     if has_water >= 3 && has_fire == 0 {
-        return "ESSENCE of water".to_string();
+        return ("ESSENCE of water".to_string(), CauldronOutput::Element(ClassicalElement::Water));
     }
 
     if has_fire >= 3 && has_water == 0 {
-        return "ESSENCE of fire".to_string();
+        return ("ESSENCE of fire".to_string(), CauldronOutput::Element(ClassicalElement::Fire));
     }
 
     if has_aether >= 3 {
-        return "ESSENCE of aether".to_string();
+        return ("ESSENCE of aether".to_string(), CauldronOutput::Element(ClassicalElement::Aether));
     }
 
-    return "brown sludge".to_string();
+    return ("brown sludge".to_string(), CauldronOutput::Sludge);
 }
 
 fn setup(mut commands: Commands, assets: Res<AssetServer>) {
@@ -218,7 +268,7 @@ fn web_asset_plugin(plugin: AssetPlugin) -> AssetPlugin {
 }
 
 async fn check_element_association(item: String) -> anyhow::Result<()> {
-    let agent = download_model_and_create_agent().await?;
+    let agent = download_model_and_create_agent(SystemReporter {}).await?;
     let (state, questions) = get_questions(&item);
     let questions: Vec<(String, Question)> =
         questions.into_iter().map(|(s, q)| (s, q.into())).collect();
@@ -282,10 +332,11 @@ fn main_app() {
                 ..default()
             }),
         laya_worker::plugin,
+        laya_processing::plugin,
     ));
 
     #[cfg(not(target_arch = "wasm32"))]
-    app.add_plugins(default_plugins);
+    app.add_plugins((default_plugins, agent_builder::bevy::plugin));
 
     app.add_plugins((
         // agent_builder::bevy::plugin,
@@ -294,133 +345,4 @@ fn main_app() {
         plugin,
     ))
     .run();
-
-    // let input = [
-    //     "computer",
-    //     "small computer chip",
-    //     "wooden table",
-    //     "acid",
-    //     "table",
-    //     "plastic table",
-    //     // "matches",
-    //     "tabasco",
-    //     "hot spoon",
-    //     // "black powder",
-    //     // "dynamite stick",
-    //     "discovery",
-    //     "huge meteorite",
-    //     // "sun",
-    //     // "eye of a newt",
-    //     "soup",
-    //     // "fish from a shop",
-    //     "sushi roll",
-    //     // "piece of meteorite",
-    //     "burning twig",
-    //     // ""
-    //     // "water",
-    //     // "coal",
-    //     // "log",
-    //     "lava",
-    //     // "habanero",
-    //     // "pepper",
-    //     // "explosion",
-
-    //     "dirt",
-    //     "cooked meat",
-    //     "some garbage",
-    //     "plastic",
-
-    //     "blood",
-    //     "wine",
-    //     "brick",
-
-    //     "dynamite",
-    //     "acid",
-    //     "C4",
-    //     "historical reference"
-    // ];
-
-    // for i in input {
-
-    // let state = json!({
-    //     "ingredient": i,
-    // });
-
-    // let element = Question {
-    //     qtype: QType::Choice,
-    //     instructions: format!("Which classical element an ingredient most associated with?"),
-    //     choice_criteria: vec![
-    //         ("water".into(), Some("liquid, wet, cold, aquatic".into())),
-    //         ("fire".into(), Some("heated, burning, spicy, energetic".into())),
-    //         ("earth".into(), Some("solid, mineral, heavy".into())),
-    //         ("air".into(), Some("gas, light, fleeting, breathing".into())),
-    //         ("aether".into(), Some("celestial".into())),
-
-    //         // ("none".into(), Some("element is not clear".into()))
-    //     ],
-    //     score_criteria: vec![],
-    //     noul_true: None,
-    //     noul_false: None,
-    // };
-
-    // let fit_into_cauldron = Question {
-    //     qtype: QType::Choice,
-    //     instructions: format!("Is an ingredient a physical item?"),
-    //     choice_criteria: vec![
-    //         ("yes".into(), None),
-    //         ("no".into(), Some("something abstract like 'invention'".into())),
-    //     ],
-    //     score_criteria: vec![],
-    //     noul_true: None,
-    //     noul_false: None,
-    // };
-
-    // let color = Question {
-    //     qtype: QType::Choice,
-    //     instructions: "Which color is this ingredient most associated with?".to_string(),
-    //     choice_criteria: vec![
-    //         ("yellow".into(), None),
-    //         ("red".into(), None),
-    //         ("green".into(), None),
-    //         ("purple".into(), None),
-    //         ("brown".into(), None),
-    //         ("white".into(), None),
-    //         ("gray".into(), None),
-    //         ("blue".into(), None),
-    //     ],
-    //     score_criteria: vec![],
-    //     noul_true: None,
-    //     noul_false: None,
-    // };
-
-    // // Batched: pass as many (id, Question) pairs as you like in one forward pass.
-    // let answers = agent.system_one(&state, &[
-    //     ("element".to_string(), element),
-    //     ("fit_into_cauldron".to_string(), fit_into_cauldron),
-    //     // ("color".to_string(), color),
-    // ])?;
-    // println!("ingredient: {i}");
-    // for (id, answer) in answers {
-    //     match answer {
-    //         Answer::Choice {
-    //             choice,
-    //             probabilities,
-    //             confidence,
-    //             act_probability,
-    //         } => {
-    //             println!("{id}: {choice} (confidence={confidence:.3}, act_p={act_probability:.3})");
-    //             let p_len = probabilities.len() as f32;
-    //             for (option, p) in probabilities {
-    //                 println!("    {option}: {p:.3}");
-    //             }
-    //         }
-    //         Answer::Score {
-    //             score, confidence, ..
-    //         } => println!("{id}: {score:.2} (confidence={confidence:.3})"),
-    //         Answer::Noul { noul, .. } => println!("{id}: {noul:.3}"),
-    //     }
-    // }
-    // println!("");
-
-    // }
 }

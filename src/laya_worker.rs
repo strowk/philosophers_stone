@@ -16,7 +16,7 @@ use web_sys::{
 };
 
 use crate::{
-    agent_builder,
+    agent_builder::{self, bevy::ModelDownloadProgress},
     laya_agent_resource::{self, LayaAgentResource},
 };
 
@@ -37,15 +37,20 @@ struct InFlightRequest {
 pub(crate) struct LayaWorkersPool {
     web_workers: Vec<LayaWebWorker>,
     in_flight_reqs: HashMap<u64, InFlightRequest>,
-    inbox: Rc<RefCell<VecDeque<LayaResponse>>>,
+    laya_responses_inbox: Rc<RefCell<VecDeque<LayaResponse>>>,
+    model_download_progress_inbox: Rc<RefCell<VecDeque<ModelDownloadProgress>>>,
     next_id: u64,
     pending_batches: HashMap<uuid::Uuid, PendingBatch>,
     req_to_batch: HashMap<u64, uuid::Uuid>,
 }
 
+const LAYA_RESPONSE_PREFIX: &str = "laya_response:";
+const MODEL_DOWNLOAD_PROGRESS_PREFIX: &str = "model_download_progress:";
+
 pub(crate) fn plugin(app: &mut App) {
     app.add_systems(Startup, setup_laya_worker);
-    app.add_systems(Update, poll_laya_worker);
+    app.add_systems(Update, poll_worker_responses);
+    app.add_systems(Update, poll_worker_download_progress);
     app.add_observer(
         |on: On<LayaRequest>, mut pool: NonSendMut<LayaWorkersPool>| {
             let req =
@@ -128,14 +133,24 @@ impl LayaWorkersPool {
     }
 }
 
-fn poll_laya_worker(worker: NonSendMut<LayaWorkersPool>, mut commands: Commands) {
+fn poll_worker_download_progress(worker: NonSendMut<LayaWorkersPool>, mut commands: Commands) {
+    while let Some(resp) = worker
+        .model_download_progress_inbox
+        .borrow_mut()
+        .pop_front()
+    {
+        commands.trigger(resp);
+    }
+}
+
+fn poll_worker_responses(worker: NonSendMut<LayaWorkersPool>, mut commands: Commands) {
     let worker = worker.into_inner();
-    while let Some(resp) = worker.inbox.borrow_mut().pop_front() {
+    while let Some(resp) = worker.laya_responses_inbox.borrow_mut().pop_front() {
         let resp_id = resp.id;
         info!("Received response from laya id={resp_id}");
         if let Some(batch_id) = worker.req_to_batch.get(&resp_id) {
             if let Some(batch) = worker.pending_batches.get_mut(batch_id) {
-                batch.responses.push(resp);
+                batch.responses.push(resp.clone());
                 info!("Matches response to batch id={batch_id}");
                 if batch.responses.len() >= batch.request_ids.len() {
                     if let Some(batch) = worker.pending_batches.remove(batch_id) {
@@ -151,9 +166,8 @@ fn poll_laya_worker(worker: NonSendMut<LayaWorkersPool>, mut commands: Commands)
                 error!("Could not find pending batch {batch_id}, dropping response")
             }
             worker.req_to_batch.remove(&resp_id);
-        } else {
-            commands.trigger(resp);
         }
+        commands.trigger(resp);
 
         if let Some(inf) = worker.in_flight_reqs.remove(&resp_id) {
             if let Some(web_worker) = worker.web_workers.get_mut(inf.worker_index) {
@@ -176,7 +190,8 @@ fn poll_laya_worker(worker: NonSendMut<LayaWorkersPool>, mut commands: Commands)
 
 fn setup_laya_worker(world: &mut World) {
     let mut web_workers = vec![];
-    let inbox = Rc::new(RefCell::new(VecDeque::new()));
+    let laya_responses_inbox = Rc::new(RefCell::new(VecDeque::new()));
+    let model_download_progress_inbox = Rc::new(RefCell::new(VecDeque::new()));
 
     for _ in 0..1 {
         // temporarily fix to one worker, should scale depending on navigator.deviceMemory and navigator.hardwareConcurrency
@@ -190,15 +205,26 @@ fn setup_laya_worker(world: &mut World) {
                 error!("Failed to create a worker: {err:?}");
             }
             Ok(web_worker) => {
-                let inbox_cb = inbox.clone();
+                let responses_inbox_cb = laya_responses_inbox.clone();
+                let progress_inbox_cb = model_download_progress_inbox.clone();
                 let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
                     let Some(text) = e.data().as_string() else {
                         error!("Received not a string data");
                         return;
                     };
-                    let resp: LayaResponse =
-                        serde_json::from_str(&text).expect("response sent was not parsed as json");
-                    inbox_cb.borrow_mut().push_back(resp);
+                    if text.starts_with(LAYA_RESPONSE_PREFIX) {
+                        let text = text.trim_start_matches(LAYA_RESPONSE_PREFIX);
+                        let resp: LayaResponse = serde_json::from_str(text)
+                            .expect("response sent was not parsed as json");
+                        responses_inbox_cb.borrow_mut().push_back(resp);
+                    } else if text.starts_with(MODEL_DOWNLOAD_PROGRESS_PREFIX) {
+                        let text = text.trim_start_matches(MODEL_DOWNLOAD_PROGRESS_PREFIX);
+                        // todo: parse and pass back in another typed inbox
+                        let text = text.trim_start_matches(MODEL_DOWNLOAD_PROGRESS_PREFIX);
+                        let resp: ModelDownloadProgress = serde_json::from_str(text)
+                            .expect("model download progress sent was not parsed as json");
+                        progress_inbox_cb.borrow_mut().push_back(resp);
+                    }
                 });
                 web_worker.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
                 onmessage.forget();
@@ -213,7 +239,8 @@ fn setup_laya_worker(world: &mut World) {
     world.insert_non_send(LayaWorkersPool {
         web_workers,
         in_flight_reqs: HashMap::new(),
-        inbox,
+        laya_responses_inbox,
+        model_download_progress_inbox,
         next_id: 1,
         pending_batches: HashMap::new(),
         req_to_batch: HashMap::new(),
@@ -229,8 +256,21 @@ pub(crate) fn worker_main() {
         laya_agent_resource::plugin,
         runner_plugin,
     ));
+    app.add_observer(pass_on_download_progress);
     info!("Laya Worker start");
     app.run();
+}
+
+fn pass_on_download_progress(on: On<ModelDownloadProgress>) {
+    let model_download_progress: &ModelDownloadProgress = on.event();
+    let resp_to_send =
+        serde_json::to_string(model_download_progress).expect("json encoding failed");
+    let resp_to_send = format!("{MODEL_DOWNLOAD_PROGRESS_PREFIX}{resp_to_send}");
+
+    let scope: DedicatedWorkerGlobalScope = js_sys::global().unchecked_into();
+    if let Err(err) = scope.post_message(&JsValue::from_str(&resp_to_send)) {
+        error!("Failed to post message: {err:?}");
+    }
 }
 
 fn runner_plugin(app: &mut App) {
@@ -468,6 +508,7 @@ fn worker_loop(app: Rc<RefCell<App>>) {
                                 resp.data = reply;
                                 let resp_to_send =
                                     serde_json::to_string(&resp).expect("json encoding failed");
+                                let resp_to_send = format!("{LAYA_RESPONSE_PREFIX}{resp_to_send}");
 
                                 let scope: DedicatedWorkerGlobalScope =
                                     js_sys::global().unchecked_into();

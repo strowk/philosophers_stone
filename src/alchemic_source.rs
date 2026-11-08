@@ -1,9 +1,7 @@
 use std::{collections::HashMap, fmt::Display, task::Waker};
 
 use bevy::ecs::{
-    observer::On,
-    query::Has,
-    system::{Commands, NonSend, NonSendMut},
+    observer::On, query::Has, resource::Resource, system::{Commands, NonSend, NonSendMut, ResMut},
 };
 use laya::{Answer, QType, Question, RLAgent};
 use serde_json::{Value, json};
@@ -17,6 +15,18 @@ pub(crate) enum ClassicalElement {
     Fire,
     Air,
     Aether,
+}
+
+impl Display for ClassicalElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ClassicalElement::Water => "water",
+            ClassicalElement::Fire => "fire",
+            ClassicalElement::Air => "air",
+            ClassicalElement::Earth => "earth",
+            ClassicalElement::Aether => "aether",
+        })
+    }
 }
 
 struct IngredientAnswers {

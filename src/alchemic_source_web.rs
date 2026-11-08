@@ -3,14 +3,15 @@ use std::{collections::HashMap, fmt::Display, task::Waker};
 use bevy::ecs::{
     observer::On,
     query::Has,
-    system::{Commands, NonSend, NonSendMut},
+    system::{Commands, NonSend, NonSendMut, Res, ResMut},
 };
 use laya::{Answer, QType, Question, RLAgent};
 use serde_json::{Value, json};
 
 use crate::{
-    IngredientsPlaced,
+    IngredientsPlaced, OutputReceived,
     alchemic_source::{AlchemicClassification, ClassicalElement, get_questions},
+    laya_processing::LayaProcessingResource,
     laya_worker::{AnswerDto, LayaRequest, LayaRequestsBatch, LayaResponsesBatch, LayaWorkersPool},
 };
 
@@ -18,11 +19,29 @@ pub(crate) fn ask_laya_for_output(
     placed: On<IngredientsPlaced>,
     worker: NonSendMut<LayaWorkersPool>,
     mut commands: Commands,
+    processing: Res<LayaProcessingResource>,
 ) {
     if placed.ingredient_1 == "iddqd" {
-        return
+        return;
+    }
+    let c = placed.clone();
+    for ingredient in [
+        c.ingredient_1,
+        c.ingredient_2,
+        c.ingredient_3,
+        c.ingredient_4,
+    ] {
+        if ingredient.trim() == "" {
+            return
+        }
+    }
+    if processing.in_progress > 0 {
+        return;
     }
     commands.trigger(get_questions_for_ingredients(placed, worker));
+    commands.trigger(OutputReceived {
+        output: "...".to_string(),
+    })
 }
 
 pub(crate) fn get_questions_for_ingredients(
