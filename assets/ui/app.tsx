@@ -133,7 +133,7 @@ function EssenceBadge({ essence }: { essence: string }) {
 }
 
 function EssenceText({ children }: { children: string }) {
-  return <div class="text-gray-900 p-1">{children}</div>;
+  return <div class="text-gray-900 p-2 font-JimNightshade-Regular">{children}</div>;
 }
 
 function WaterEssence() {
@@ -211,7 +211,7 @@ function Trivia() {
   });
   return (
     <div class="pt-2 flex flex-col w-full">
-      <div class="text-md mb-2 w-full font-JimNightshade-Regular">Trivia:</div>
+      <div class="mb-2 w-full font-JimNightshade-Regular text-2xl">Trivia:</div>
       <div class="relative text-xs">
         <Show when={next() !== ""}>
           <div class="absolute top-0 w-full moving-from-0">{current()}</div>
@@ -301,7 +301,7 @@ function IngredientInput({
       type="text"
       value={value()}
       placeholder="input ingredient"
-      class="text-black bg-green-200 focus:bg-green-100 border-2 focus:border-4 border-green-900 focus:border-green-300 w-128 m-1 p-1 rounded-md"
+      class="text-black bg-green-200 focus:bg-green-100 border-2 focus:border-4 border-green-900 focus:border-green-300 max-w-128 m-1 p-1 rounded-md"
       onInput={(e) => {
         setValue(e.target.value);
       }}
