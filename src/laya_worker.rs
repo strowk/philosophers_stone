@@ -25,8 +25,18 @@ struct PendingBatch {
     request_ids: Vec<u64>,
 }
 
-pub(crate) struct LayaWorker {
+struct LayaWebWorker {
     web_worker: Worker,
+    queue: VecDeque<u64>,
+}
+
+struct InFlightRequest {
+    worker_index: usize,
+}
+
+pub(crate) struct LayaWorkersPool {
+    web_workers: Vec<LayaWebWorker>,
+    in_flight_reqs: HashMap<u64, InFlightRequest>,
     inbox: Rc<RefCell<VecDeque<LayaResponse>>>,
     next_id: u64,
     pending_batches: HashMap<uuid::Uuid, PendingBatch>,
@@ -36,27 +46,42 @@ pub(crate) struct LayaWorker {
 pub(crate) fn plugin(app: &mut App) {
     app.add_systems(Startup, setup_laya_worker);
     app.add_systems(Update, poll_laya_worker);
-    app.add_observer(|on: On<LayaRequest>, worker: NonSend<LayaWorker>| {
-        let req = serde_json::to_string(on.event()).expect("failed to encode laya request as json");
-        if let Err(err) = worker.web_worker.post_message(&JsValue::from_str(&req)) {
-            error!("Failed to post worker message: {err:?}");
-        }
-    });
     app.add_observer(
-        |on: On<LayaRequestsBatch>, mut worker: NonSendMut<LayaWorker>| {
+        |on: On<LayaRequest>, mut pool: NonSendMut<LayaWorkersPool>| {
+            let req =
+                serde_json::to_string(on.event()).expect("failed to encode laya request as json");
+            if let Some((worker_index, worker)) = pool.get_soonest_to_free_worker() {
+                if let Err(err) = worker.web_worker.post_message(&JsValue::from_str(&req)) {
+                    error!("Failed to post worker message: {err:?}");
+                } else {
+                    worker.queue.push_back(on.id);
+                    pool.in_flight_reqs
+                        .insert(on.id, InFlightRequest { worker_index });
+                }
+            }
+        },
+    );
+    app.add_observer(
+        |on: On<LayaRequestsBatch>, mut pool: NonSendMut<LayaWorkersPool>| {
             let reqs = &on.event().reqs;
             let mut req_ids = vec![];
             let batch_id = uuid::Uuid::new_v4();
             for req in reqs.iter() {
-                worker.req_to_batch.insert(req.id, batch_id);
+                pool.req_to_batch.insert(req.id, batch_id);
                 req_ids.push(req.id);
-                let req =
+                let req_ser =
                     serde_json::to_string(&req).expect("failed to encode laya request as json");
-                if let Err(err) = worker.web_worker.post_message(&JsValue::from_str(&req)) {
-                    error!("Failed to post worker message: {err:?}");
+                if let Some((worker_index, worker)) = pool.get_soonest_to_free_worker() {
+                    if let Err(err) = worker.web_worker.post_message(&JsValue::from_str(&req_ser)) {
+                        error!("Failed to post worker message: {err:?}");
+                    } else {
+                        worker.queue.push_back(req.id);
+                        pool.in_flight_reqs
+                            .insert(req.id, InFlightRequest { worker_index });
+                    }
                 }
             }
-            worker.pending_batches.insert(
+            pool.pending_batches.insert(
                 batch_id,
                 PendingBatch {
                     responses: Vec::with_capacity(reqs.len()),
@@ -67,7 +92,7 @@ pub(crate) fn plugin(app: &mut App) {
     );
 }
 
-impl LayaWorker {
+impl LayaWorkersPool {
     pub(crate) fn new_request(
         &mut self,
         state: Value,
@@ -85,9 +110,25 @@ impl LayaWorker {
         self.next_id += 1;
         return give;
     }
+
+    fn get_soonest_to_free_worker(&mut self) -> Option<(usize, &mut LayaWebWorker)> {
+        let mut shortest_queue = usize::MAX;
+        let mut soonest_worker = None;
+        for (idx, worker) in self.web_workers.iter_mut().enumerate() {
+            let queue_len = worker.queue.len();
+            if queue_len < 1 {
+                return Some((idx, worker));
+            }
+            if queue_len < shortest_queue {
+                shortest_queue = queue_len;
+                soonest_worker = Some((idx, worker));
+            }
+        }
+        return soonest_worker;
+    }
 }
 
-fn poll_laya_worker(worker: NonSendMut<LayaWorker>, mut commands: Commands) {
+fn poll_laya_worker(worker: NonSendMut<LayaWorkersPool>, mut commands: Commands) {
     let worker = worker.into_inner();
     while let Some(resp) = worker.inbox.borrow_mut().pop_front() {
         let resp_id = resp.id;
@@ -113,40 +154,70 @@ fn poll_laya_worker(worker: NonSendMut<LayaWorker>, mut commands: Commands) {
         } else {
             commands.trigger(resp);
         }
+
+        if let Some(inf) = worker.in_flight_reqs.remove(&resp_id) {
+            if let Some(web_worker) = worker.web_workers.get_mut(inf.worker_index) {
+                if let Some(popped_id) = web_worker.queue.pop_front() {
+                    if popped_id != resp_id {
+                        // this probably does not matter since actual values are moot anyway, but would be interesting to know
+                        warn!(
+                            "Popped id from queue does not match response id, do they arrive in wrong order?"
+                        )
+                    }
+                }
+            } else {
+                warn!("Could not find web worker matching the in flight request");
+            }
+        } else {
+            warn!("Could not find in flight request matching response id");
+        }
     }
 }
 
 fn setup_laya_worker(world: &mut World) {
-    let options = WorkerOptions::new();
-    options.set_type(web_sys::WorkerType::Module);
-    let new_worker_result = Worker::new_with_options("./init_worker.js", &options);
-    match new_worker_result {
-        Err(err) => {
-            error!("Failed to create a worker: {err:?}");
-        }
-        Ok(web_worker) => {
-            let inbox = Rc::new(RefCell::new(VecDeque::new()));
-            let inbox_cb = inbox.clone();
-            let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
-                let Some(text) = e.data().as_string() else {
-                    error!("Received not a string data");
-                    return;
-                };
-                let resp: LayaResponse =
-                    serde_json::from_str(&text).expect("response sent was not parsed as json");
-                inbox_cb.borrow_mut().push_back(resp);
-            });
-            web_worker.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-            onmessage.forget();
-            world.insert_non_send(LayaWorker {
-                web_worker,
-                inbox,
-                next_id: 1,
-                pending_batches: HashMap::new(),
-                req_to_batch: HashMap::new(),
-            });
+    let mut web_workers = vec![];
+    let inbox = Rc::new(RefCell::new(VecDeque::new()));
+
+    for _ in 0..1 {
+        // temporarily fix to one worker, should scale depending on navigator.deviceMemory and navigator.hardwareConcurrency
+        // and also make sure to start only one while model is downloading first time
+
+        let options = WorkerOptions::new();
+        options.set_type(web_sys::WorkerType::Module);
+        let new_worker_result = Worker::new_with_options("./init_worker.js", &options);
+        match new_worker_result {
+            Err(err) => {
+                error!("Failed to create a worker: {err:?}");
+            }
+            Ok(web_worker) => {
+                let inbox_cb = inbox.clone();
+                let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+                    let Some(text) = e.data().as_string() else {
+                        error!("Received not a string data");
+                        return;
+                    };
+                    let resp: LayaResponse =
+                        serde_json::from_str(&text).expect("response sent was not parsed as json");
+                    inbox_cb.borrow_mut().push_back(resp);
+                });
+                web_worker.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+                onmessage.forget();
+                web_workers.push(LayaWebWorker {
+                    queue: VecDeque::new(),
+                    web_worker,
+                });
+            }
         }
     }
+
+    world.insert_non_send(LayaWorkersPool {
+        web_workers,
+        in_flight_reqs: HashMap::new(),
+        inbox,
+        next_id: 1,
+        pending_batches: HashMap::new(),
+        req_to_batch: HashMap::new(),
+    });
 }
 
 pub(crate) fn worker_main() {

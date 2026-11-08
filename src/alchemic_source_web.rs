@@ -11,12 +11,12 @@ use serde_json::{Value, json};
 use crate::{
     IngredientsPlaced,
     alchemic_source::{AlchemicClassification, ClassicalElement, get_questions},
-    laya_worker::{AnswerDto, LayaRequest, LayaRequestsBatch, LayaResponsesBatch, LayaWorker},
+    laya_worker::{AnswerDto, LayaRequest, LayaRequestsBatch, LayaResponsesBatch, LayaWorkersPool},
 };
 
 pub(crate) fn ask_laya_for_output(
     placed: On<IngredientsPlaced>,
-    worker: NonSendMut<LayaWorker>,
+    worker: NonSendMut<LayaWorkersPool>,
     mut commands: Commands,
 ) {
     if placed.ingredient_1 == "iddqd" {
@@ -27,7 +27,7 @@ pub(crate) fn ask_laya_for_output(
 
 pub(crate) fn get_questions_for_ingredients(
     placed: On<IngredientsPlaced>,
-    mut worker: NonSendMut<LayaWorker>,
+    mut worker: NonSendMut<LayaWorkersPool>,
 ) -> LayaRequestsBatch {
     let mut res = LayaRequestsBatch::default();
     for ingredient in [
