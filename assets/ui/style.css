@@ -106,3 +106,15 @@
   animation-duration: 1s;
   animation-timing-function: ease-in-out;
 }
+
+@font-face {
+  font-family: "JimNightshade-Regular";
+  src: url("./JimNightshade-Regular.ttf");
+}
+
+h1 {
+    font-family: "JimNightshade-Regular";
+    font-size: 2rem;
+    line-height: 2.5rem;
+}
+

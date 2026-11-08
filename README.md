@@ -13,3 +13,5 @@ This game code is dual-licensed under either
 
 at your option.
 
+Additionally this project includes fonts, each of which is licensed under the SIL Open Font License the full text of which is included in `assets/ui` with the same name as the font file but with ".LICENSE.txt" extension.
+

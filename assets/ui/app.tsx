@@ -281,11 +281,11 @@ function RootLayout({
 }
 
 function Title({ text }: { text: string }) {
-  return <h1 class="text-lg text-white">{text}</h1>;
+  return <h1 class="text-white">{text}</h1>;
 }
 
 function Subtitle({ text }: { text: string }) {
-  return <h1 class="text-sm text-white">{text}</h1>;
+  return <div class="text-sm text-white">{text}</div>;
 }
 
 function IngredientInput({
